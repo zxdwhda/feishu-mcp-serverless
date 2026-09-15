@@ -43,7 +43,10 @@ test('OAuth metadata, consent, PKCE, audience, one-time code, refresh and revoke
   const unauth=await f.post('/feishu/mcp',{});assert.equal(unauth.status,401);assert.match(unauth.headers.get('www-authenticate')!,/oauth-protected-resource\/feishu\/mcp/);
   const metadata=await (await f.request('/.well-known/oauth-authorization-server/feishu')).json() as any;assert.deepEqual(metadata.code_challenge_methods_supported,['S256']);assert.equal(metadata.issuer,f.config.issuer);
   assert.equal((await f.post('/feishu/register',{redirect_uris:['https://attacker.example/callback']})).status,400);
-  const tx=await f.authorize();assert.equal((await f.post('/feishu/consent',{transaction:tx.transaction,csrf:tx.csrf})).status,400);
+  const tx=await f.authorize();
+  const another=await f.authorize();assert.notEqual(tx.cookie.split('=')[0],another.cookie.split('=')[0]);
+  const browserError=await f.request('/feishu/callback?state=missing&code=x',{headers:{Accept:'text/html'}});assert.equal(browserError.status,400);assert.match(await browserError.text(),/连接尚未完成/);
+  assert.equal((await f.post('/feishu/consent',{transaction:tx.transaction,csrf:tx.csrf})).status,400);
   assert.equal((await f.request('/feishu/callback?state='+tx.transaction+'&code=x',{headers:{Cookie:tx.cookie}})).status,400);
   const issued=await f.code();
   const body={grant_type:'authorization_code',client_id:f.client.client_id,redirect_uri:callback,resource:f.config.resource,code:issued.code,code_verifier:issued.verifier};

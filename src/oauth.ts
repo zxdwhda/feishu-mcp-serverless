@@ -30,7 +30,8 @@ export class OAuth {
     return client;
   }
   private validateResource(value: unknown) { if (value !== this.config.resource) throw new Error('invalid_target'); }
-  private browserMatches(req: Request, tx: Transaction) { return equal(tx.cookieHash, hash(cookie(req, this.cookieName))); }
+  private transactionCookie(id: string) { return this.cookieName + '_' + hash(id).slice(0,24); }
+  private browserMatches(req: Request, tx: Transaction, id: string) { return equal(tx.cookieHash, hash(cookie(req, this.transactionCookie(id)))); }
   private async issue(grant: Grant) {
     const access = random(), refresh = random();
     await this.store.put('access/' + hash(access), grant, 3600);
@@ -60,7 +61,11 @@ export class OAuth {
       try { await fn(req,res); } catch(e) {
         const message = (e as Error).message;
         const publicErrors = ['invalid_request','invalid_client','invalid_target','invalid_scope','invalid_grant','access_denied'];
-        res.status(publicErrors.includes(message) ? 400 : 503).json({ error: publicErrors.includes(message) ? message : 'temporarily_unavailable' });
+        const status = publicErrors.includes(message) ? 400 : 503;
+        const error = publicErrors.includes(message) ? message : 'temporarily_unavailable';
+        if (req.headers.accept?.includes('text/html')) {
+          res.status(status).type('html').send(page('连接尚未完成', `<p>此次授权没有完成（${escape(error)}）。请关闭这个窗口，返回 ChatGPT 关闭登录弹窗，然后重新点击连接。</p><p>如果重试后仍出现此提示，请联系服务维护者。</p>`));
+        } else res.status(status).json({ error });
       }
     };
     app.post(b+'/register', route(async(req,res)=>{
@@ -86,13 +91,13 @@ export class OAuth {
       const txId=random(), browser=random(), csrf=random();
       const tx: Transaction={ clientId:client.client_id, redirectUri, state:q.state as string|undefined, challenge:q.code_challenge as string, cookieHash:hash(browser), csrf, verifier:random() };
       await this.store.put('transactions/'+hash(txId),tx,600);
-      res.cookie(this.cookieName,browser,{httpOnly:true,secure:c.origin.startsWith('https://'),sameSite:'lax',path:b,maxAge:600000});
+      res.cookie(this.transactionCookie(txId),browser,{httpOnly:true,secure:c.origin.startsWith('https://'),sameSite:'lax',path:b,maxAge:600000});
       res.type('html').send(page('连接飞书',`<p>允许 <strong>${escape(client.client_name)}</strong> 通过此服务操作你授权的飞书资料，包括多维表格、文档与任务。实际可用范围由飞书权限决定。</p><p>授权完成后返回：<code>${escape(new URL(redirectUri).origin)}</code></p><form method="post" action="${b}/consent"><input type="hidden" name="transaction" value="${txId}"><input type="hidden" name="csrf" value="${csrf}"><button type="submit">继续前往飞书授权</button></form><p>如非你本人发起，请关闭此页面。</p>`));
     }));
     app.post(b+'/consent',route(async(req,res)=>{
       if (req.headers.origin && req.headers.origin!==c.origin) throw new Error('access_denied');
       const id=required(req.body.transaction), tx=await this.store.get<Transaction>('transactions/'+hash(id));
-      if (!tx || !this.browserMatches(req,tx) || !equal(tx.csrf,required(req.body.csrf))) throw new Error('access_denied');
+      if (!tx || !this.browserMatches(req,tx,id) || !equal(tx.csrf,required(req.body.csrf))) throw new Error('access_denied');
       if (!await this.store.claim('consent/'+hash(id),600)) throw new Error('invalid_grant');
       await this.store.put('consented/'+hash(id),true,600);
       const url=new URL(c.feishuDomain+'/open-apis/authen/v1/authorize');
@@ -101,7 +106,7 @@ export class OAuth {
     }));
     app.get(b+'/callback',route(async(req,res)=>{
       const id=required(req.query.state), tx=await this.store.get<Transaction>('transactions/'+hash(id));
-      if (!tx || !this.browserMatches(req,tx) || !await this.store.get('consented/'+hash(id))) throw new Error('access_denied');
+      if (!tx || !this.browserMatches(req,tx,id) || !await this.store.get('consented/'+hash(id))) throw new Error('access_denied');
       if (!await this.store.claim('callback/'+hash(id),600)) throw new Error('invalid_grant');
       const target=new URL(tx.redirectUri); target.searchParams.set('iss',c.issuer); if(tx.state)target.searchParams.set('state',tx.state);
       if(req.query.error) { target.searchParams.set('error','access_denied'); res.redirect(target.toString()); return; }

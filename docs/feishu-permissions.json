@@ -2,6 +2,7 @@
   "scopes": {
     "tenant": [],
     "user": [
+      "offline_access",
       "contact:user.basic_profile:readonly",
       "base:app:create",
       "base:app:read",
@@ -74,7 +75,8 @@
       "im:message:recall",
       "im:chat:read",
       "im:chat:update",
-      "im:chat.members:read"
+      "im:chat.members:read",
+      "base:record:retrieve"
     ]
   }
 }

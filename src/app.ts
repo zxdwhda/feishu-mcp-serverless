@@ -10,7 +10,7 @@ export function createApp(config:Config,store:Store,feishu = new Feishu(config,s
   app.disable('x-powered-by');
   // Browsers apply form-action to every redirect in the upstream login chain.
   const loginDomain = config.feishuDomain.endsWith('.feishu.cn') ? 'feishu.cn' : 'larksuite.com';
-  const formOrigins = ['open','accounts','passport','login'].map(host=>`https://${host}.${loginDomain}`).join(' ');
+  const formOrigins = [...['open','accounts','passport','login'].map(host=>`https://${host}.${loginDomain}`), ...new Set(config.allowedRedirects.map(uri=>new URL(uri).origin))].join(' ');
   app.use((_req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin','Content-Security-Policy':`default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${formOrigins}; frame-ancestors 'none'`});next();});
   app.use(express.json({limit:'2mb'}));app.use(express.urlencoded({extended:false,limit:'16kb'}));
   oauth.install(app);
