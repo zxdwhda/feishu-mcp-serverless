@@ -15,7 +15,7 @@ const profile=aliyun.profiles.find(p=>p.name===(process.env.ALIYUN_PROFILE||aliy
 if(!profile?.access_key_id || !profile?.access_key_secret)throw new Error('An existing Aliyun CLI AccessKey profile is required');
 const Client=Fc.default;
 const accountId=local.role.split(':')[3];
-const fc=new Client(new OpenApi.Config({accessKeyId:profile.access_key_id,accessKeySecret:profile.access_key_secret,securityToken:profile.sts_token,endpoint:`${accountId}.${local.region}.fc.aliyuncs.com`}));
+const fc=new Client(new OpenApi.Config({accessKeyId:profile.access_key_id,accessKeySecret:profile.access_key_secret,securityToken:profile.sts_token,endpoint:`${accountId}.${local.region}.fc.aliyuncs.com`,readTimeout:60000,connectTimeout:10000}));
 const oss=new OSS({region:`oss-${local.region}`,accessKeyId:profile.access_key_id,accessKeySecret:profile.access_key_secret,secure:true,bucket:local.environmentVariables.OSS_BUCKET});
 async function optional(fn){try{return await fn();}catch(e){if(e.statusCode===404 || /NotFound|NotExist/.test(e.code||''))return undefined;throw e;}}
 async function preflight(){
@@ -25,7 +25,7 @@ async function preflight(){
  const info=await oss.getBucketInfo(local.environmentVariables.OSS_BUCKET);
  if(info.bucket.AccessControlList.Grant!=='private')throw new Error('State bucket must be private');
  const versioning=await oss.getBucketVersioning(local.environmentVariables.OSS_BUCKET);
- if(versioning.status)throw new Error('State bucket must never enable versioning: one-time claims rely on forbid-overwrite');
+ if(versioning.versionStatus)throw new Error('State bucket must never enable versioning: one-time claims rely on forbid-overwrite');
  console.log(JSON.stringify({preflight:'passed',region:local.region,function:local.functionName}));
 }
 try{
