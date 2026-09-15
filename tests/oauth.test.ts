@@ -24,6 +24,8 @@ async function fixture(){
   const consent=await request('/feishu/authorize?'+q);assert.equal(consent.status,200);
   assert.equal(consent.headers.get('referrer-policy'),'strict-origin');
   assert.ok(consent.headers.get('content-security-policy')!.includes("form-action 'self' "+config.feishuDomain));
+  assert.ok(consent.headers.get('content-security-policy')!.includes('https://accounts.feishu.cn'));
+  assert.ok(consent.headers.get('content-security-policy')!.includes('https://passport.feishu.cn'));
   const html=await consent.text(),cookie=consent.headers.get('set-cookie')!.split(';')[0];
   const transaction=/name="transaction" value="([^"]+)"/.exec(html)![1],csrf=/name="csrf" value="([^"]+)"/.exec(html)![1];
   return {verifier,cookie,transaction,csrf};
