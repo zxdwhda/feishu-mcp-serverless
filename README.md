@@ -35,7 +35,7 @@ npm run verify
 
 ## 飞书应用
 
-1. 在自己的企业创建应用，配置所需 API 的用户权限。可参考已验证的 [权限清单](docs/feishu-permissions.json)，包含持续访问所需的 `offline_access` 和云文档搜索所需的 `drive:drive.search:readonly`。
+1. 在自己的企业创建应用，配置所需 API 的用户权限。可参考已验证的 [权限清单](docs/feishu-permissions.json)，包含持续访问所需的 `offline_access` 、云文档搜索所需的 `drive:drive.search:readonly` 及 Wiki 搜索所需的 `search:docs:read`。
 2. 添加精确回调 `https://你的域名/feishu/callback`。
 3. 发布应用，设置合适的可用范围。
 4. 将应用 ID、Secret 配置到部署环境。不要提交密钥或真实账单。
