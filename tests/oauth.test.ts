@@ -4,6 +4,7 @@ import {createApp} from '../src/app.js';
 import {configFromEnv} from '../src/config.js';
 import {MemoryStore,hash,now} from '../src/store.js';
 import {Feishu} from '../src/feishu.js';
+import {catalog, exposedName} from '../src/tools.js';
 import {challenge} from '../src/oauth.js';
 const callback='https://chatgpt.com/connector_platform_oauth_redirect';
 async function fixture(){
@@ -56,7 +57,12 @@ test('OAuth metadata, consent, PKCE, audience, one-time code, refresh and revoke
   const token=await results.find(r=>r.status===200)!.json() as any;assert.ok(token.access_token);assert.notEqual(token.access_token,'upstream-1');
   const headers={Authorization:'Bearer '+token.access_token,Accept:'application/json, text/event-stream'};
   const init=await f.post('/feishu/mcp',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'test',version:'1'}}},headers);assert.equal(init.status,200);
-  const listed=await f.post('/feishu/mcp',{jsonrpc:'2.0',id:2,method:'tools/list',params:{}},headers);assert.equal(listed.status,200);const listing=await listed.json() as any;assert.ok(listing.result.tools.some((t:any)=>t.name==='feishu_search_tools'));
+  const listed=await f.post('/feishu/mcp',{jsonrpc:'2.0',id:2,method:'tools/list',params:{}},headers);assert.equal(listed.status,200);const listing=await listed.json() as any;assert.equal(listing.result.tools.length,catalog.length+2);
+  const tools=listing.result.tools;assert.equal(new Set(tools.map((t:any)=>t.name)).size,tools.length);
+  for(const tool of catalog) assert.ok(tools.some((t:any)=>t.name===exposedName(tool.name)));
+  assert.ok(tools.every((t:any)=>/^[A-Za-z0-9_-]{1,64}$/.test(t.name)));
+  for(const name of ['feishu_docx_builtin_search','feishu_wiki_v1_node_search']) assert.equal(tools.find((t:any)=>t.name===name).annotations.readOnlyHint,true);
+  assert.equal(tools.find((t:any)=>t.name==='feishu_bitable_v1_appTableRecord_batchUpdate').annotations.destructiveHint,true);
   const search=await f.post('/feishu/mcp',{jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'feishu_search_tools',arguments:{query:'bitable',limit:2}}},headers);assert.equal(search.status,200);const result=await search.json() as any;assert.ok(JSON.parse(result.result.content[0].text).total>10);
   const refreshBody={grant_type:'refresh_token',client_id:f.client.client_id,refresh_token:token.refresh_token,resource:f.config.resource};
   const rotated=await f.post('/feishu/token',refreshBody);assert.equal(rotated.status,200);assert.equal((await f.post('/feishu/token',refreshBody)).status,400);

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Client } from '@larksuiteoapi/node-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { AllToolsZh } from '@larksuiteoapi/lark-mcp/dist/mcp-tool/tools/index.js';
@@ -11,10 +12,14 @@ import type { Config } from './config.js';
 // Keep all upstream tools that can operate as the signed-in user. Unsupported
 // binary transfer endpoints are excluded; their transport needs separate work.
 export const catalog: McpTool[] = (AllToolsZh as McpTool[]).filter(t=>t.accessTokens?.includes('user') && !t.supportFileUpload && !t.supportFileDownload);
+export function exposedName(name: string) {
+  const full = 'feishu_' + name.replace(/\./g,'_');
+  return full.length <= 64 ? full : full.slice(0,53) + '_' + createHash('sha256').update(name).digest('hex').slice(0,10);
+}
 const byName = new Map(catalog.map(t=>[t.name,t]));
 const textResult = (data: unknown, isError = false) => ({ content: [{type:'text' as const,text:JSON.stringify(data)}], ...(isError?{isError}: {}) });
 export function makeServer(config: Config, userToken: ()=>Promise<string>) {
-  const server = new McpServer({name:'Feishu MCP Feishu',version:'0.1.0'},{instructions:'操作飞书资料。先使用 feishu_search_tools 查找准确工具名与参数，再调用 feishu_call_tool。多维表格使用 bitable 工具。写入后读取验证；删除、发送消息等需有明确用户指令。分页结果需继续读取 next_page_token/page_token。'});
+  const server = new McpServer({name:'Feishu MCP Feishu',version:'0.2.0'},{instructions:'操作当前授权用户的飞书资料。搜索文件使用 feishu_docx_builtin_search，搜索知识库使用 feishu_wiki_v1_node_search；feishu_search_tools 仅搜索工具说明，不搜索实际文件。全部用户工具已直接提供，优先直接调用。多维表格使用 bitable 工具。写入后读取验证；删除、发消息及权限修改需有用户指令。分页按各接口的 has_more、page_token 或 offset 继续。'});
   const http = axios.create({timeout:25000});
   http.interceptors.response.use(response=>{
     // HTTP 200 can still be a Feishu API failure. Preserve it as an MCP error.
@@ -51,13 +56,17 @@ export function makeServer(config: Config, userToken: ()=>Promise<string>) {
   },async({name,arguments:args})=>{
     const tool=byName.get(name);return tool?invoke(tool,args):textResult({error:'unknown_tool',message:'请先通过 feishu_search_tools 查找工具。'},true);
   });
-  // Common Bitable operations also have direct, fully typed tools for everyday use.
-  const direct = ['bitable.v1.app.create','bitable.v1.app.get','bitable.v1.appTable.list','bitable.v1.appTable.create',
-    'bitable.v1.appTableField.list','bitable.v1.appTableField.create','bitable.v1.appTableRecord.search',
-    'bitable.v1.appTableRecord.batchCreate','bitable.v1.appTableRecord.batchUpdate','bitable.v1.appTableRecord.get'];
-  for(const name of direct){const tool=byName.get(name);if(!tool)continue;
-    server.registerTool('feishu_'+name.replace(/\./g,'_'),{description:'飞书：'+tool.description,inputSchema:tool.schema,
-      annotations:{readOnlyHint:tool.httpMethod?.toUpperCase()==='GET'||name.endsWith('.search'),destructiveHint:false,openWorldHint:true},_meta:security},(args:unknown)=>invoke(tool,args));
+  // Expose the whole supported catalog so clients can discover and invoke each
+  // operation directly, including file search, rather than only Bitable shortcuts.
+  for(const tool of catalog){
+    const readOnly = tool.httpMethod?.toUpperCase()==='GET' || /\.(search|get|list|batchGet|query|read)$/.test(tool.name);
+    const {useUAT: _useUAT, ...schema} = tool.schema;
+    const descriptions:Record<string,string> = {
+      'docx.builtin.search':'搜索当前用户有权访问的飞书云文档。用于按记账、账单、财务等关键词查找实际文件，返回文件信息；这不是工具目录搜索。',
+      'wiki.v1.node.search':'按关键词搜索当前用户有权访问的飞书知识库节点，寻找文档、表格及相关资料。'
+    };
+    server.registerTool(exposedName(tool.name),{description:descriptions[tool.name] || '飞书：'+tool.description,inputSchema:schema,
+      annotations:{readOnlyHint:readOnly,destructiveHint:!readOnly,idempotentHint:readOnly,openWorldHint:true},_meta:security},(args:unknown)=>invoke(tool,args));
   }
   return server;
 }

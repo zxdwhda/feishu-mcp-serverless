@@ -76,7 +76,8 @@
       "im:chat:read",
       "im:chat:update",
       "im:chat.members:read",
-      "base:record:retrieve"
+      "base:record:retrieve",
+      "drive:drive.search:readonly"
     ]
   }
 }

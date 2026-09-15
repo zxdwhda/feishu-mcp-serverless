@@ -15,7 +15,7 @@ export function createApp(config:Config,store:Store,feishu = new Feishu(config,s
   app.use(express.json({limit:'2mb'}));app.use(express.urlencoded({extended:false,limit:'16kb'}));
   oauth.install(app);
   app.get('/',(_req,res)=>res.type('html').send(page('Feishu MCP MCP',`<p>分别添加连接并授权，即可在 ChatGPT 中使用对应服务。</p><h2>飞书</h2><p><a href="${config.basePath}">连接说明</a> · <code>${config.resource}</code></p><h2>Companion</h2><p><code>${config.origin}/companion/mcp</code></p>`)));
-  app.get(config.basePath+'/healthz',(_req,res)=>res.json({status:'ok',service:'feishu-mcp',version:'0.1.0',revision:process.env.REVISION||'development',catalog_size:catalog.length}));
+  app.get(config.basePath+'/healthz',(_req,res)=>res.json({status:'ok',service:'feishu-mcp',version:'0.2.0',revision:process.env.REVISION||'development',catalog_size:catalog.length,exposed_tools:catalog.length+2}));
   app.get([config.basePath,config.basePath+'/'],(_req,res)=>res.type('html').send(page('Feishu MCP 飞书 MCP',`<p>在 ChatGPT 中添加 OAuth 连接：</p><p><code>${config.resource}</code></p><p>支持多维表格、文档、知识库、任务等飞书工具。通过飞书登录后，按所授予权限访问自己的资料。</p>`)));
   app.all(config.basePath+'/mcp',async(req,res,next)=>{
     try {
