@@ -44,6 +44,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
   await oss.put(key,archive);
   const common={description:`Feishu MCP ${revision}`,runtime:'custom.debian11',handler:'index.handler',cpu:0.5,memorySize:1024,diskSize:512,timeout:60,instanceConcurrency:10,internetAccess:true,role:local.role,disableInjectCredentials:'Request',
    customRuntimeConfig:{command:['/code/node','/code/server.cjs'],port:Number(local.environmentVariables.PORT||9000)},
+   ...(local.logConfig ? {logConfig:local.logConfig} : {}),
    environmentVariables:{...local.environmentVariables,REVISION:revision},code:{ossBucketName:local.environmentVariables.OSS_BUCKET,ossObjectName:key}};
   const existing=await optional(()=>fc.getFunction(local.functionName,new Fc.GetFunctionRequest({}))); 
   if(existing)await fc.updateFunction(local.functionName,new Fc.UpdateFunctionRequest({body:new Fc.UpdateFunctionInput(common)}));

@@ -78,7 +78,8 @@
       "im:chat.members:read",
       "base:record:retrieve",
       "drive:drive.search:readonly",
-      "search:docs:read"
+      "search:docs:read",
+      "docx:document.block:convert"
     ]
   }
 }

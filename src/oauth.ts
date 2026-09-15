@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import type { Config } from './config.js';
 import { Feishu, type Session } from './feishu.js';
+import { profiles } from './catalog.js';
 import { type Store, random, hash, now } from './store.js';
 
 const SESSION_TTL = 30 * 86400;
@@ -10,7 +11,7 @@ const equal = (a: string, b: string) => { const x = Buffer.from(a), y = Buffer.f
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export const page = (title: string, body: string) => `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(title)}</title><style>body{font:17px/1.7 system-ui;max-width:680px;margin:64px auto;padding:0 24px;color:#18232d}button{background:#176b50;color:white;border:0;padding:12px 24px;border-radius:6px;font:inherit}code{overflow-wrap:anywhere}a{color:#176b50}</style><h1>${escape(title)}</h1>${body}</html>`;
 interface Client { client_id: string; client_name: string; redirect_uris: string[]; token_endpoint_auth_method: 'none' }
-interface Transaction { clientId: string; redirectUri: string; state?: string; challenge: string; cookieHash: string; csrf: string; verifier: string }
+interface Transaction { resource?: string; clientId: string; redirectUri: string; state?: string; challenge: string; cookieHash: string; csrf: string; verifier: string }
 interface Grant { clientId: string; sessionId: string; resource: string; issuer: string; scopes: string[] }
 interface Code extends Grant { redirectUri: string; challenge: string }
 function required(value: unknown): string { if (typeof value !== 'string' || !value || value.length > 8192) throw new Error('invalid_request'); return value; }
@@ -23,13 +24,13 @@ export class OAuth {
     this.metadataPath = '/.well-known/oauth-protected-resource' + config.basePath + '/mcp';
     this.cookieName = 'mcp_' + config.basePath.slice(1) + '_login';
   }
-  challengeHeader() { return `Bearer resource_metadata="${this.config.origin}${this.metadataPath}", scope="feishu"`; }
+  challengeHeader(resource = this.config.resource) { return `Bearer resource_metadata="${this.config.origin}${resource === this.config.resource ? this.metadataPath : this.config.basePath + '/.well-known/oauth-protected-resource' + new URL(resource).pathname.slice(this.config.basePath.length)}", scope="feishu"`; }
   private async client(id: string) {
     const client = await this.store.get<Client>('clients/' + hash(id));
     if (!client) throw new Error('invalid_client');
     return client;
   }
-  private validateResource(value: unknown) { if (value !== this.config.resource) throw new Error('invalid_target'); }
+  private validateResource(value: unknown) { if (!profiles.some(p => value === this.config.resource + (p === 'daily' ? '' : '/' + p))) throw new Error('invalid_target'); }
   private transactionCookie(id: string) { return this.cookieName + '_' + hash(id).slice(0,24); }
   private browserMatches(req: Request, tx: Transaction, id: string) { return equal(tx.cookieHash, hash(cookie(req, this.transactionCookie(id)))); }
   private async issue(grant: Grant) {
@@ -38,11 +39,11 @@ export class OAuth {
     await this.store.put('refresh/' + hash(refresh), grant, SESSION_TTL);
     return { access_token: access, refresh_token: refresh, token_type: 'Bearer', expires_in: 3600, scope: grant.scopes.join(' ') };
   }
-  async authenticate(req: Request): Promise<Grant | undefined> {
+  async authenticate(req: Request, resource = this.config.resource): Promise<Grant | undefined> {
     const token = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(req.headers.authorization || '')?.[1];
     if (!token) return undefined;
     const grant = await this.store.get<Grant>('access/' + hash(token));
-    if (!grant || grant.resource !== this.config.resource || grant.issuer !== this.config.issuer || !grant.scopes.includes('feishu')) return undefined;
+    if (!grant || grant.resource !== resource || grant.issuer !== this.config.issuer || !grant.scopes.includes('feishu')) return undefined;
     if (await this.store.get('revoked/' + grant.sessionId)) return undefined;
     return grant;
   }
@@ -55,6 +56,10 @@ export class OAuth {
       token_endpoint_auth_methods_supported: ['none'], code_challenge_methods_supported: ['S256'],
       scopes_supported: ['feishu'], authorization_response_iss_parameter_supported: true };
     app.get([this.metadataPath, b+'/.well-known/oauth-protected-resource'], (_req,res)=>res.json(protectedMetadata));
+    for (const profile of profiles.filter(p => p !== 'daily')) {
+      const resource = c.resource + '/' + profile;
+      app.get([this.metadataPath + '/' + profile, b + '/.well-known/oauth-protected-resource/mcp/' + profile], (_req,res)=>res.json({...protectedMetadata,resource}));
+    }
     app.get(['/.well-known/oauth-authorization-server'+b, b+'/.well-known/oauth-authorization-server'], (_req,res)=>res.json(authMetadata));
     const route = (fn: (req: Request,res: Response)=>Promise<unknown>) => async (req: Request,res: Response) => {
       res.set('Cache-Control','no-store');
@@ -89,7 +94,7 @@ export class OAuth {
       if (q.scope && q.scope!=='feishu') throw new Error('invalid_scope');
       if (q.state !== undefined && typeof q.state !== 'string') throw new Error('invalid_request');
       const txId=random(), browser=random(), csrf=random();
-      const tx: Transaction={ clientId:client.client_id, redirectUri, state:q.state as string|undefined, challenge:q.code_challenge as string, cookieHash:hash(browser), csrf, verifier:random() };
+      const tx: Transaction={ resource:q.resource as string, clientId:client.client_id, redirectUri, state:q.state as string|undefined, challenge:q.code_challenge as string, cookieHash:hash(browser), csrf, verifier:random() };
       await this.store.put('transactions/'+hash(txId),tx,600);
       res.cookie(this.transactionCookie(txId),browser,{httpOnly:true,secure:c.origin.startsWith('https://'),sameSite:'lax',path:b,maxAge:600000});
       res.type('html').send(page('连接飞书',`<p>允许 <strong>${escape(client.client_name)}</strong> 通过此服务操作你授权的飞书资料，包括多维表格、文档与任务。实际可用范围由飞书权限决定。</p><p>授权完成后返回：<code>${escape(new URL(redirectUri).origin)}</code></p><form method="post" action="${b}/consent"><input type="hidden" name="transaction" value="${txId}"><input type="hidden" name="csrf" value="${csrf}"><button type="submit">继续前往飞书授权</button></form><p>如非你本人发起，请关闭此页面。</p>`));
@@ -116,7 +121,7 @@ export class OAuth {
       const sessionId=random(), code=random();
       const session:Session={userId,tokens,expiresAt:now()+tokens.expires_in};
       await this.store.put('sessions/'+sessionId,session,SESSION_TTL);
-      const grant:Code={clientId:tx.clientId,sessionId,resource:c.resource,issuer:c.issuer,scopes:['feishu'],redirectUri:tx.redirectUri,challenge:tx.challenge};
+      const grant:Code={clientId:tx.clientId,sessionId,resource:tx.resource || c.resource,issuer:c.issuer,scopes:['feishu'],redirectUri:tx.redirectUri,challenge:tx.challenge};
       await this.store.put('codes/'+hash(code),grant,120);
       target.searchParams.set('code',code);res.redirect(target.toString());
     }));
@@ -126,18 +131,18 @@ export class OAuth {
       if(body.grant_type==='authorization_code') {
         const code=required(body.code), stored=await this.store.get<Code>('codes/'+hash(code));
         const verifier=required(body.code_verifier);
-        if(!/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) || !stored || stored.clientId!==client.client_id || stored.redirectUri!==body.redirect_uri || !equal(stored.challenge,challenge(verifier)))throw new Error('invalid_grant');
+        if(!/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) || !stored || stored.clientId!==client.client_id || stored.redirectUri!==body.redirect_uri || stored.resource!==body.resource || !equal(stored.challenge,challenge(verifier)))throw new Error('invalid_grant');
         if(!await this.store.claim('code/'+hash(code),600))throw new Error('invalid_grant');
         grant=stored;
       } else if(body.grant_type==='refresh_token') {
         const token=required(body.refresh_token), stored=await this.store.get<Grant>('refresh/'+hash(token));
-        if(!stored || stored.clientId!==client.client_id || await this.store.get('revoked/'+stored.sessionId))throw new Error('invalid_grant');
+        if(!stored || stored.clientId!==client.client_id || stored.resource!==body.resource || await this.store.get('revoked/'+stored.sessionId))throw new Error('invalid_grant');
         if(body.scope && body.scope!=='feishu')throw new Error('invalid_scope');
         if(!await this.store.get('sessions/'+stored.sessionId))throw new Error('invalid_grant');
         if(!await this.store.claim('refresh/'+hash(token),35*86400))throw new Error('invalid_grant');
         grant=stored;
       } else throw new Error('invalid_request');
-      if(grant.issuer!==c.issuer || grant.resource!==c.resource)throw new Error('invalid_grant');
+      if(grant.issuer!==c.issuer || grant.resource!==body.resource)throw new Error('invalid_grant');
       res.json(await this.issue({clientId:grant.clientId,sessionId:grant.sessionId,resource:grant.resource,issuer:grant.issuer,scopes:grant.scopes}));
     }));
     app.post(b+'/revoke',route(async(req,res)=>{

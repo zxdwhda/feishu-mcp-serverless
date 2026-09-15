@@ -52,3 +52,24 @@
 每次部署将代码包以 revision 和 SHA-256 为对象名保留在 `releases/feishu/`，并生成私有部署回执。回滚时检出已验证提交，恢复对应的私有环境配置，通过同一个部署入口发布；环境密钥必须与现存加密状态匹配。
 
 HTTPS 证书续期后，通过 `domain` 更新证书并核对真实握手。证书申请与本机定时续期不是同一件事；没有配置持续执行的续期机制时，必须记录有效期和维护责任，不能声称自动续期完成。
+
+## v0.3 工具与日志更新
+
+日常入口仍为 `/feishu/mcp`；`/feishu/mcp/all` 和其他分组都走现有 `/feishu/*` 路由，不改 Companion。分组的 OAuth resource metadata 使用 401 challenge 中的 `/feishu/.well-known/oauth-protected-resource/mcp/<profile>`，无需变更共享域名的 well-known 路由。
+
+私有部署配置可增加 `logConfig`，由同一部署脚本传给 FC：
+
+```json
+{
+  "logConfig": {
+    "project": "your-sls-project",
+    "logstore": "feishu-mcp",
+    "enableRequestMetrics": true,
+    "enableInstanceMetrics": true
+  }
+}
+```
+
+需先创建同地域 SLS project/logstore，并确认现有 FC 角色具有写日志权限。本次使用示例地域 SLS，7 天保留期、1 个 shard；日志存储会产生正常云资源费用。日志字段白名单与隐私边界见 `chatgpt-compatibility.md`。没有配置 logConfig 的自托管部署仍可从标准输出读取日志。
+
+Markdown 转换额外要求用户权限 `docx:document.block:convert`，将其加入飞书应用和 FEISHU_SCOPES 后重新连接；只更新服务端 scope 不会扩大旧访问令牌的权限。

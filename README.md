@@ -10,8 +10,8 @@
 - 飞书用户登录；MCP 客户端使用独立的授权码、访问令牌和刷新令牌。飞书令牌不会交给 MCP 客户端。
 - OAuth discovery、DCR、PKCE S256、resource 校验、显式授权页、浏览器状态绑定、一次性授权码、刷新令牌轮换和撤销。
 - 私有 OSS 加密存储授权状态，跨实例的一次性操作用 OSS 原子禁止覆盖实现。
-- 503 个用户身份工具全部直接提供给客户端，覆盖多维表格、云文档、知识库、云盘、日历、任务等；另保留 2 个通用入口，共 505 个工具。
-- 文件搜索直接调用 `feishu_docx_builtin_search`，知识库搜索调用 `feishu_wiki_v1_node_search`。`feishu_search_tools` 仅检索工具说明，不搜索文件。
+- 日常入口提供 13 个工具：9 个业务工具和 4 个能力发现/调用工具；503 个原生用户工具完整保留。
+- 文件搜索使用 `feishu_search_files`，并行搜索云文档和 Wiki；文档支持 Markdown 读写，多维表格提供结构、查询和批量记录操作。
 - 每个操作仍受飞书应用权限、用户授权和资源权限约束，直接提供工具不会绕过这些权限。
 
 **工具目录存在不代表每个 API 都已真实验收。** 官方上游标注的二进制上传下载接口不在当前调用目录中；个人账单的文件导入可先解析导出文件，再调用多维表格记录工具。不能自动访问银行或支付平台账单。
@@ -60,6 +60,17 @@ sh deploy/deploy.sh domain /absolute/path/to/private-deploy.json
 在支持自定义 MCP 的 ChatGPT 设置中添加 MCP URL，选择 OAuth。当前部署的连接名称建议为 **Feishu MCP 飞书**。复制 ChatGPT 界面显示的精确回调地址到 `OAUTH_REDIRECT_URIS`；服务支持 issuer identification，默认包含稳定回调。
 
 具体账户是否开放自定义连接，以 ChatGPT 界面为准。[OpenAI 官方连接说明](https://developers.openai.com/plugins/deploy/connect-chatgpt) · [授权说明](https://developers.openai.com/plugins/build/auth)。
+
+## 工具组织与兼容
+
+- 日常：`/feishu/mcp`，13 个工具，定义约 21 KB。
+- 完整：`/feishu/mcp/all`，全部 516 个工具；仅在需要直接查看全部原生接口时使用。
+- 分组：末尾添加 `docs`、`bitable`、`calendar`、`tasks`、`messages`、`drive`、`wiki`，提供日常工具和对应原生工具。
+- 日常模式通过 `feishu_search_tools` → `feishu_get_tool_schema` → `feishu_read_tool` / `feishu_call_tool` 访问其他能力。只读执行器拒绝写入。
+- 旧直接工具名继续可调用，兼容尚未刷新的 ChatGPT 快照；更新后刷新工具列表即可使用新入口。不同 URL 的授权令牌按 resource 隔离。
+- 分组改变工具展示，不改变用户或应用的数据权限。
+
+设计、错误约定与测试用例见 [ChatGPT 接入与工具设计](docs/chatgpt-compatibility.md)。
 
 ## 个人账单示例
 

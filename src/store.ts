@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import OSS from 'ali-oss';
+import { timed } from './telemetry.js';
 
 export const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 export const random = () => randomBytes(32).toString('base64url');
@@ -40,7 +41,7 @@ export class OssStore implements Store {
   }
   async get<T>(key: string): Promise<T | undefined> {
     try {
-      const result = await this.client.get(this.objectName(key));
+      const result = await timed('state_store','get:'+key.split('/')[0],()=>this.client.get(this.objectName(key)));
       const raw = Buffer.from(result.content), decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, raw.subarray(0,12));
       decipher.setAAD(Buffer.from(this.objectName(key))); decipher.setAuthTag(raw.subarray(12,28));
       const data = JSON.parse(Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString());
