@@ -7,6 +7,7 @@ import { annotationsFor, profiles } from '../src/catalog.js';
 import { businessTools, parseReference, type Invoke } from '../src/business-tools.js';
 import { configFromEnv } from '../src/config.js';
 import { classifyError, ToolError } from '../src/tool-errors.js';
+import { z } from 'zod';
 const config=configFromEnv({FEISHU_APP_ID:'test',FEISHU_APP_SECRET:'test'});
 async function fixture(invoke:Invoke) {
  const server=makeServer(config,async()=>{throw new Error('unexpected token read');},'daily',invoke);
@@ -61,6 +62,17 @@ test('document conversion preserves root order and reports partial writes withou
  const result=await run('feishu_create_document',{title:'test',markdown:'# hello'},invoke);assert.equal(result.content_written,true);assert.deepEqual(calls[2][1].data.children_id,['b','a']);
  await assert.rejects(run('feishu_create_document',{title:'test',markdown:'body'},async(name,args)=>{if(name.endsWith('Descendant.create'))throw new ToolError('upstream_timeout','timeout');return invoke(name,args);}),e=>e instanceof ToolError && e.kind==='partial_write' && e.details.document_id==='created');
  let created=false;await assert.rejects(run('feishu_create_document',{title:'test',markdown:'image'},async name=>{if(name.endsWith('document.create'))created=true;return {first_level_block_ids:['a'],blocks:[{block_id:'a',block_type:27}]};}),/暂不支持/);assert.equal(created,false);
+});
+test('upstream descendant validation preserves converted block identity and child edges',()=>{
+ const tool=catalog.find(t=>t.name==='docx.v1.documentBlockDescendant.create')!;
+ const input={path:{document_id:'doc1',block_id:'doc1'},data:{children_id:['root'],index:-1,descendants:[
+  {block_id:'root',block_type:12,children:['nested'],bullet:{elements:[{text_run:{content:'Root'}}]}},
+  {block_id:'nested',block_type:2,text:{elements:[{text_run:{content:'Nested'}}]}}
+ ]}};
+ const parsed:any=z.object(tool.schema).parse(input);
+ assert.deepEqual(parsed.data.children_id,['root']);
+ assert.deepEqual(parsed.data.descendants.map((b:any)=>b.block_id),['root','nested']);
+ assert.deepEqual(parsed.data.descendants[0].children,['nested']);
 });
 test('table schema preserves separate pagination and query forwards selected fields and filters',async()=>{
  const schema:any=await run('feishu_get_table_schema',{reference:'https://tenant.feishu.cn/base/base1?table=tbl1'},async name=>name.includes('Field')?{items:[{field_id:'f1',field_name:'amount',type:2,property:{}}],has_more:true,page_token:'fields-next'}:{items:[],has_more:false});

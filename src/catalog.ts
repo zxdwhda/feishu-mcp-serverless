@@ -5,7 +5,16 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 // Keep all upstream tools that can operate as the signed-in user. Unsupported
 // binary transfer endpoints are excluded; their transport needs separate work.
-export const catalog: McpTool[] = (AllToolsZh as McpTool[]).filter(t=>t.accessTokens?.includes('user') && !t.supportFileUpload && !t.supportFileDownload);
+export const catalog: McpTool[] = (AllToolsZh as McpTool[]).filter(t=>t.accessTokens?.includes('user') && !t.supportFileUpload && !t.supportFileDownload).map(tool=>{
+  if(tool.name!=='docx.v1.documentBlockDescendant.create')return tool;
+  // Upstream 0.5.1 omits these required graph fields. Zod otherwise strips
+  // convert's temporary IDs and Feishu rejects the tree with code 1770041.
+  const data=tool.schema.data as z.AnyZodObject;
+  const blocks=data.shape.descendants as z.ZodArray<z.AnyZodObject>;
+  return {...tool,schema:{...tool.schema,data:data.extend({descendants:z.array(blocks.element.extend({
+    block_id:z.string().min(1),children:z.array(z.string()).optional(),table_cell:z.object({}).optional()
+  }))})}};
+});
 export function exposedName(name: string) {
   const full = 'feishu_' + name.replace(/\./g,'_');
   return full.length <= 64 ? full : full.slice(0,53) + '_' + createHash('sha256').update(name).digest('hex').slice(0,10);
