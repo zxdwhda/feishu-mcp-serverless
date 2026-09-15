@@ -33,6 +33,8 @@ try{
  else if(action==='deploy'){
   await preflight();
   const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  // Always package this checkout, never a dist directory from an older commit.
+  execFileSync('npm',['run','build'],{stdio:'inherit'});
   const archive=path.resolve('dist/function.zip');
   execFileSync('python3',['-c',`import zipfile, pathlib, sys
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:

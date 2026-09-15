@@ -34,13 +34,13 @@ npm run verify
 
 ## 飞书应用
 
-1. 在自己的企业创建应用，配置所需 API 的用户权限。
+1. 在自己的企业创建应用，配置所需 API 的用户权限。可参考已验证的 [权限清单](docs/feishu-permissions.json)，包含持续访问所需的 `offline_access`。
 2. 添加精确回调 `https://你的域名/feishu/callback`。
 3. 发布应用，设置合适的可用范围。
 4. 将应用 ID、Secret 配置到部署环境。不要提交密钥或真实账单。
 5. `FEISHU_SCOPES` 包含 `offline_access` 和需要授权的 API scopes；应用未开通的 scope 不会因这里配置而生效。
 
-通过用户身份执行，不能借此获得用户本来没有的数据权限。变更权限后应重新连接授权。
+通过用户身份执行，不能借此获得用户本来没有的数据权限。变更权限后应重新连接授权。多维表格的单条读取使用 `base:record:read`，按条件查询和列出记录还需要 `base:record:retrieve`，两者都应开通并在 OAuth 中请求。
 
 ## FC 部署
 
@@ -63,6 +63,10 @@ sh deploy/deploy.sh domain /absolute/path/to/private-deploy.json
 ## 个人账单示例
 
 见 [个人账单表设计](docs/personal-bills.md)。这是通用飞书 MCP 的使用示例，项目并不限于账单。
+
+## 验收
+
+已完成 ChatGPT 网页授权及多维表格真实读写；详见 [验收记录](docs/verification.md)。
 
 ## 当前边界
 

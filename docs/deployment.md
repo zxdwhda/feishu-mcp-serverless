@@ -27,7 +27,7 @@
 
 复制 `deploy/config.example.json`，密钥配置放 Git 目录外或被忽略且权限 0600 的 `.local/`。同时准备 Node 官方二进制并核对官方 SHASUMS256，填入 nodeBinary 的绝对路径。
 
-部署脚本读取现有 Aliyun CLI profile，默认使用 current，可用 `ALIYUN_PROFILE` 指定。源码应先通过 `npm run verify` 并提交；preflight 核对工作区、OSS ACL/版本配置。发布包只包含三个构建文件和 node，不打包 `.env`、`.local`、OAuth 状态和个人资料。
+部署脚本读取现有 Aliyun CLI profile，默认使用 current，可用 `ALIYUN_PROFILE` 指定。源码应先通过 `npm run verify` 并提交；preflight 核对工作区、OSS ACL/版本配置。部署入口会先从当前提交重新构建，避免打包旧 dist。发布包只包含三个构建文件和 node，不打包 `.env`、`.local`、OAuth 状态和个人资料。
 
 `domain` 合并配置中列出的路径，保留其他路径，但会更新共享域名证书。应由域名维护任务统一执行，避免同时修改。DNS CNAME 指向 `<account-id>.your-region.fc.aliyuncs.com`。
 
