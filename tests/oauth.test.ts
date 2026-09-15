@@ -22,6 +22,7 @@ async function fixture(){
  async function authorize(){
   const verifier='a'.repeat(64),q=new URLSearchParams({client_id:client.client_id,redirect_uri:callback,response_type:'code',resource:config.resource,scope:'feishu',state:'client-state',code_challenge:challenge(verifier),code_challenge_method:'S256'});
   const consent=await request('/feishu/authorize?'+q);assert.equal(consent.status,200);
+  assert.equal(consent.headers.get('referrer-policy'),'strict-origin');
   assert.ok(consent.headers.get('content-security-policy')!.includes("form-action 'self' "+config.feishuDomain));
   const html=await consent.text(),cookie=consent.headers.get('set-cookie')!.split(';')[0];
   const transaction=/name="transaction" value="([^"]+)"/.exec(html)![1],csrf=/name="csrf" value="([^"]+)"/.exec(html)![1];

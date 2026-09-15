@@ -8,7 +8,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 export function createApp(config:Config,store:Store,feishu = new Feishu(config,store)) {
   const app=express(),oauth=new OAuth(config,store,feishu);
   app.disable('x-powered-by');
-  app.use((_req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':`default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${config.feishuDomain}; frame-ancestors 'none'`});next();});
+  app.use((_req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin','Content-Security-Policy':`default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${config.feishuDomain}; frame-ancestors 'none'`});next();});
   app.use(express.json({limit:'2mb'}));app.use(express.urlencoded({extended:false,limit:'16kb'}));
   oauth.install(app);
   app.get('/',(_req,res)=>res.type('html').send(page('Feishu MCP MCP',`<p>分别添加连接并授权，即可在 ChatGPT 中使用对应服务。</p><h2>飞书</h2><p><a href="${config.basePath}">连接说明</a> · <code>${config.resource}</code></p><h2>Companion</h2><p><code>${config.origin}/companion/mcp</code></p>`)));
