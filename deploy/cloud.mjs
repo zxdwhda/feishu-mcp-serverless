@@ -43,8 +43,8 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
   const digest=crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),key=`releases/feishu/${revision}-${digest}.zip`;
   await oss.put(key,archive);
   const common={description:`Feishu MCP ${revision}`,runtime:'custom.debian11',handler:'index.handler',cpu:0.5,memorySize:1024,diskSize:512,timeout:60,instanceConcurrency:10,internetAccess:true,role:local.role,disableInjectCredentials:'Request',
-   customRuntimeConfig:{command:['/code/node','/code/server.cjs'],port:Number(local.environmentVariables.PORT||9000)},
-   ...(local.logConfig ? {logConfig:local.logConfig} : {}),
+   customRuntimeConfig:{command:['/code/node','/code/server.cjs'],port:Number(local.environmentVariables.PORT||9000),healthCheckConfig:{httpGetUrl:'/feishu/healthz',initialDelaySeconds:0,periodSeconds:3,timeoutSeconds:2,failureThreshold:3,successThreshold:1}},
+   ...(local.logConfig ? {logConfig:{...local.logConfig,enableRequestMetrics:true,enableInstanceMetrics:true,logBeginRule:'None'}} : {}),
    environmentVariables:{...local.environmentVariables,REVISION:revision},code:{ossBucketName:local.environmentVariables.OSS_BUCKET,ossObjectName:key}};
   const existing=await optional(()=>fc.getFunction(local.functionName,new Fc.GetFunctionRequest({}))); 
   if(existing)await fc.updateFunction(local.functionName,new Fc.UpdateFunctionRequest({body:new Fc.UpdateFunctionInput(common)}));
@@ -56,7 +56,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
  }else if(action==='domain'){
   const existing=await optional(()=>fc.getCustomDomain(local.domain));
   const routes=[...(existing?.body?.routeConfig?.routes||[])];
-  for(const route of local.routes){const index=routes.findIndex(r=>r.path===route.path);if(index>=0)routes[index]=route;else routes.push(route);}
+  for(const route of local.routes){const index=routes.findIndex(r=>r.path===route.path);if(index>=0)routes[index]={...route,qualifier:routes[index].qualifier||route.qualifier};else routes.push(route);}
   const body={domainName:local.domain,protocol:'HTTPS',routeConfig:{routes},certConfig:{certName:local.domain,certificate:fs.readFileSync(local.certificatePath,'utf8'),privateKey:fs.readFileSync(local.privateKeyPath,'utf8')}};
   if(existing)await fc.updateCustomDomain(local.domain,new Fc.UpdateCustomDomainRequest({body:new Fc.UpdateCustomDomainInput(body)}));
   else await fc.createCustomDomain(new Fc.CreateCustomDomainRequest({body:new Fc.CreateCustomDomainInput(body)}));

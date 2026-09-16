@@ -49,7 +49,7 @@
 
 ## 回滚与证书续期
 
-每次部署将代码包以 revision 和 SHA-256 为对象名保留在 `releases/feishu/`，并生成私有部署回执。回滚时检出已验证提交，恢复对应的私有环境配置，通过同一个部署入口发布；环境密钥必须与现存加密状态匹配。
+每次部署将代码包以 revision 和 SHA-256 为对象名保留在 `releases/feishu/`，并生成私有部署回执。生产域名与 HTTP 触发器指向 `prod` 别名。部署仅更新 LATEST；测试并提交后，单独执行版本发布与别名切换。常规回滚直接把别名切回已知版本，避免重新构建；环境密钥必须与现存加密状态匹配。
 
 HTTPS 证书续期后，通过 `domain` 更新证书并核对真实握手。证书申请与本机定时续期不是同一件事；没有配置持续执行的续期机制时，必须记录有效期和维护责任，不能声称自动续期完成。
 
@@ -73,3 +73,36 @@ HTTPS 证书续期后，通过 `domain` 更新证书并核对真实握手。证�
 需先创建同地域 SLS project/logstore，并确认现有 FC 角色具有写日志权限。本次使用示例地域 SLS，7 天保留期、1 个 shard；日志存储会产生正常云资源费用。日志字段白名单与隐私边界见 `chatgpt-compatibility.md`。没有配置 logConfig 的自托管部署仍可从标准输出读取日志。
 
 Markdown 转换额外要求用户权限 `docx:document.block:convert`，将其加入飞书应用和 FEISHU_SCOPES 后重新连接；只更新服务端 scope 不会扩大旧访问令牌的权限。
+
+## 生产可观测性和版本操作
+
+`deploy/fc-ops.py` 是这两个 MCP 的共享云配置入口，明确限定示例地域地域、`your-log-project` 和 `mcp.example.com`。自托管用户应修改这些资源常量，不能直接对自己的账号运行本生产配置。代码部署仍归各自项目。
+
+```sh
+python3 deploy/fc-ops.py configure
+python3 deploy/fc-ops.py snapshot --function feishu-mcp --snapshot-dir /private/path/fc-backups
+./deploy/deploy.sh deploy /private/path/deploy.json
+python3 deploy/fc-ops.py release --function feishu-mcp --revision <committed-revision>
+python3 deploy/fc-ops.py alarms
+# 回滚示例，版本号取发布记录：
+python3 deploy/fc-ops.py rollback --function feishu-mcp --version <previous-version>
+```
+
+snapshot 保存 0600 私有配置并发布回滚版本；不得提交备份。release 发布不可变版本，只切换目标函数的域名路由与触发器，保留另一函数路由和 TLS 配置。检查公网 health 的 revision；切换或健康失败时恢复之前路由与别名。发布成功后必须进行真实 MCP 只读调用；失败时用 rollback 回到先前版本。不要把版本发布自动重试当成幂等操作，响应丢失后先查询版本和别名。
+
+两个 Logstore 使用 7 天保留期、1 个 shard。message、requestId、durationMs、statusCode 等开启字段分析；既有历史日志不会自动补建字段索引。工具日志白名单为 event、operation、outcome、request_id、duration_ms，Companion 也识别 HTTP 200 内的 isError。HTTP 日志不记录 URL 查询、正文或 Authorization。FC 自带请求指标仍有平台定义的请求字段。
+
+在各自 Logstore 执行以下 SQL，统计工具调用和失败：
+
+```sql
+* | SELECT json_extract_scalar(message, '$.operation') AS tool,
+           json_extract_scalar(message, '$.outcome') AS outcome,
+           count(*) AS calls,
+           avg(cast(json_extract_scalar(message, '$.duration_ms') AS double)) AS avg_ms
+    WHERE json_extract_scalar(message, '$.event') = 'mcp_tool'
+    GROUP BY tool, outcome
+```
+
+每函数 6 条云监控规则：函数错误、平台错误、并发限流、资源限流每分钟 >=1；HTTP 5xx 每分钟 >=3；最大耗时飞书 >=55 秒、Companion >=110 秒。统计周期 60 秒、静默 1 小时，空闲无数据视为正常，复用“云账号报警联系人”。函数超时由函数错误告警覆盖，耗时规则作提前提示。HTTP 200 的业务失败可在上述 SQL 中查到，尚不等同于云监控函数错误。告警配置回读成功不代表已验证邮件或短信投递。
+
+健康检查为 `/feishu/healthz`，每 3 秒一次、超时 2 秒、连续失败 3 次。它仅检查进程，不访问飞书或 OSS。预留实例、链路追踪、实例并发、VPC、NAS、会话亲和不在本次修改范围。
