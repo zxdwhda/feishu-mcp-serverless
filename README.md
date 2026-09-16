@@ -1,5 +1,7 @@
 # Feishu MCP Serverless
 
+本项目由 [zxdwhda](https://github.com/zxdwhda) 独立维护，正式开源仓库：[zxdwhda/feishu-mcp](https://github.com/zxdwhda/feishu-mcp)。
+
 将飞书官方 OpenAPI MCP 的工具部署到阿里云函数计算，让 ChatGPT 等远程 MCP 客户端通过 OAuth 操作飞书资料。
 
 独立 MIT 项目，复用 `@larksuiteoapi/lark-mcp@0.5.1` 的工具、参数结构和调用实现。这里负责 HTTP 服务、云端授权、持久化及部署。来源与原许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
