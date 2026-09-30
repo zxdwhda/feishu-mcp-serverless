@@ -5,15 +5,17 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios from 'axios';
 import type { Config } from './config.js';
-import { catalog, byName, exposedName, nativeSchema, nativeTools, annotationsFor, type ToolProfile } from './catalog.js';
+import { catalog, byName, exposedName, nativeSchema, nativeTools, annotationsFor, searchCatalog, type ToolProfile } from './catalog.js';
 import { businessTools, type Invoke } from './business-tools.js';
 import { ToolError, classifyError, errorResult } from './tool-errors.js';
 import { timed } from './telemetry.js';
+import { invokeContract } from './contract-transport.js';
+import { installSkills, skillCapabilities } from './skills.js';
 export { catalog, exposedName } from './catalog.js';
-export const VERSION='0.3.0';
+export const VERSION='0.4.0';
 const securitySchemes=[{type:'oauth2',scopes:['feishu']}];
 const auth={securitySchemes,_meta:{securitySchemes}};
-const discoverySchema={ query:z.string().max(200), project:z.string().max(80).optional(),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(20).default(5),include_schema:z.boolean().default(false).describe('仅在需要执行参数时设为 true；通常先看摘要，再用 feishu_get_tool_schema。') };
+const discoverySchema={ query:z.string().max(200), project:z.string().max(80).optional(),access:z.enum(['all','read','write']).default('all'),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(20).default(5),include_schema:z.boolean().default(false).describe('仅在需要执行参数时设为 true；通常先看摘要，再用 feishu_get_tool_schema。') };
 const dispatchSchema={name:z.string().max(180),arguments:z.record(z.unknown()).describe('严格按 feishu_get_tool_schema 返回的 inputSchema 填写。')};
 const objectSchema=(shape:z.ZodRawShape)=>zodToJsonSchema(z.object(shape),{$refStrategy:'root'}) as Tool['inputSchema'];
 const metaCache=new Map<ToolProfile,Tool[]>();
@@ -26,7 +28,7 @@ export function toolDefinitions(profile:ToolProfile='daily'):Tool[] {
     {name:'feishu_read_tool',title:'执行其他飞书查询',description:'用于执行已通过 feishu_get_tool_schema 确认的只读操作。服务端拒绝写入操作。日常文件搜索、文档读取、表格查询优先使用专用工具。',inputSchema:objectSchema(dispatchSchema),outputSchema:objectSchema({result:z.unknown()}),annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true},...auth},
     {name:'feishu_call_tool',title:'执行其他飞书操作',description:'完整能力兼容入口。先用 feishu_get_tool_schema 读取参数，再执行指定原生操作；可能创建、覆盖、删除资料、发送消息或修改权限，操作须符合用户请求。只读操作优先使用 feishu_read_tool。失败或超时后不要盲目重试写入。',inputSchema:objectSchema(dispatchSchema),outputSchema:objectSchema({result:z.unknown()}),annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:false,openWorldHint:true},...auth}
   );
-  for(const t of nativeTools(profile))tools.push({name:exposedName(t.name),title:t.description.split('-').slice(-2).join(' · ').slice(0,100),description:t.description,inputSchema:nativeSchema(t) as Tool['inputSchema'],outputSchema:objectSchema({result:z.unknown()}),annotations:annotationsFor(t),...auth});
+  for(const t of nativeTools(profile))tools.push({name:exposedName(t.name),title:t.description.split('-').slice(-2).join(' · ').slice(0,100)||t.name,description:t.description||t.name,inputSchema:nativeSchema(t) as Tool['inputSchema'],outputSchema:objectSchema({result:z.unknown()}),annotations:annotationsFor(t),...auth});
   metaCache.set(profile,tools);return tools;
 }
 export function makeInvoker(config:Config,userToken:()=>Promise<string>):Invoke {
@@ -45,6 +47,7 @@ export function makeInvoker(config:Config,userToken:()=>Promise<string>):Invoke 
     tokenPromise ||= timed('authorization_session','user_token',userToken);
     const token=await tokenPromise;
     return timed('feishu_api',tool.name,async()=> {
+      if(tool.name.startsWith('cli.') || tool.name.startsWith('sheets.v2.tools.')) return invokeContract(config,token,tool,parsed.data);
       if(tool.name==='docx.builtin.search') {
         const response=await client.request({method:'POST',url:'/open-apis/suite/docs-api/search/object',data:(parsed.data as any).data},withUserAccessToken(token)) as any;
         return response.data ?? response;
@@ -68,7 +71,8 @@ export function makeInvoker(config:Config,userToken:()=>Promise<string>):Invoke 
   };
 }
 export function makeServer(config:Config,userToken:()=>Promise<string>,profile:ToolProfile='daily',override?:Invoke,authChallenge?:string) {
-  const server=new Server({name:'Feishu MCP Feishu',version:VERSION},{capabilities:{tools:{}},instructions:'操作当前授权用户的飞书资料。找文件优先 feishu_search_files；读正文用 feishu_read_document；多维表格先 get_table_schema 再 query/create/update/delete_records。其他能力通过 feishu_search_tools → feishu_get_tool_schema → feishu_read_tool/feishu_call_tool 使用，完整用户工具仍可访问。分页或正文截断时继续读取；部分失败不等于没有数据。写入后读取核对，超时先查结果，避免重复写入。只在用户请求范围内修改、发送或删除。'});
+  const server=new Server({name:'Feishu MCP Feishu',version:VERSION},{capabilities:{tools:{},...skillCapabilities},instructions:'操作当前授权用户的飞书资料。找文件优先 feishu_search_files；读正文用 feishu_read_document；多维表格先 get_table_schema 再 query/create/update/delete_records。其他能力通过 feishu_search_tools → feishu_get_tool_schema → feishu_read_tool/feishu_call_tool 使用，完整用户工具仍可访问。分页或正文截断时继续读取；部分失败不等于没有数据。写入后读取核对，超时先查结果，避免重复写入。只在用户请求范围内修改、发送或删除。'});
+  installSkills(server);
   const invoke=override||makeInvoker(config,userToken);
   const challenge=authChallenge || `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource${config.basePath}/mcp", scope="feishu"`;
   const definitions=toolDefinitions(profile);
@@ -81,9 +85,8 @@ export function makeServer(config:Config,userToken:()=>Promise<string>,profile:T
         const business=businessTools.find(t=>t.name===name);
         if(business){const input=z.object(business.input).strict().parse(args);const result=await business.run(input,invoke);const output=z.object(business.output).safeParse(result);if(!output.success)throw new ToolError('unexpected_response','飞书返回结构不符合预期；写入后先读取核对，勿重复执行。');return structured(output.data);}
         if(name==='feishu_search_tools') {
-          const {query,project,offset,limit,include_schema}=z.object(discoverySchema).parse(args);
-          const words=query.toLowerCase().split(/\s+/).filter(Boolean);
-          const found=catalog.filter(t=>(!project||t.project===project)&&words.every(w=>(t.name+' '+t.description).toLowerCase().includes(w)));
+          const {query,project,access,offset,limit,include_schema}=z.object(discoverySchema).parse(args);
+          const found=searchCatalog(query,project,access);
           return structured({total:found.length,next_offset:offset+limit<found.length?offset+limit:null,tools:found.slice(offset,offset+limit).map(t=>({name:t.name,description:t.description,project:t.project,read_only:annotationsFor(t).readOnlyHint,...(include_schema?{inputSchema:nativeSchema(t)}:{})}))});
         }
         if(name==='feishu_get_tool_schema') {

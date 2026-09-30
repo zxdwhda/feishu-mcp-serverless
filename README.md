@@ -2,7 +2,7 @@
 
 本项目由 [zxdwhda](https://github.com/zxdwhda) 独立维护，正式开源仓库：[zxdwhda/feishu-mcp](https://github.com/zxdwhda/feishu-mcp)。
 
-将飞书官方 OpenAPI MCP 的工具部署到阿里云函数计算，让 ChatGPT 等远程 MCP 客户端通过 OAuth 操作飞书资料。
+将飞书官方 OpenAPI MCP 的工具部署到独立服务器，让 ChatGPT 等远程 MCP 客户端通过 OAuth 操作飞书资料。
 
 独立 MIT 项目，复用 `@larksuiteoapi/lark-mcp@0.5.1` 的工具、参数结构和调用实现。这里负责 HTTP 服务、云端授权、持久化及部署。来源与原许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
@@ -45,7 +45,13 @@ npm run verify
 
 通过用户身份执行，不能借此获得用户本来没有的数据权限。变更权限后应重新连接授权。多维表格的单条读取使用 `base:record:read`，按条件查询和列出记录还需要 `base:record:retrieve`，两者都应开通并在 OAuth 中请求。
 
-## FC 部署
+## 服务器部署（当前）
+
+由 Feishu MCP 登记的 `deploy/sg-workbench/deploy.sh` 管理示例地域服务器上的容器、TLS、切换与回滚。复用已有飞书应用和加密 OSS 状态，MCP 地址保持 `https://mcp.example.com/feishu/mcp`。完整插件在 `plugins/feishu-workspace/`，包含 28 个技能入口；服务器提供五个领域入口供 ChatGPT 扫描导入，覆盖同一份指导内容。
+
+函数计算不再是当前部署目标。以下命令保留为历史恢复入口；迁移后不运行它们重新发布。
+
+## FC 部署（历史）
 
 详见 [部署说明](docs/deployment.md)。部署入口：
 
@@ -66,7 +72,7 @@ sh deploy/deploy.sh domain /absolute/path/to/private-deploy.json
 ## 工具组织与兼容
 
 - 日常：`/feishu/mcp`，13 个工具，定义约 21 KB。
-- 完整：`/feishu/mcp/all`，全部 516 个工具；仅在需要直接查看全部原生接口时使用。
+- 完整：`/feishu/mcp/all`，全部 765 个工具；仅在需要直接查看全部原生接口时使用。
 - 分组：末尾添加 `docs`、`bitable`、`calendar`、`tasks`、`messages`、`drive`、`wiki`，提供日常工具和对应原生工具。
 - 日常模式通过 `feishu_search_tools` → `feishu_get_tool_schema` → `feishu_read_tool` / `feishu_call_tool` 访问其他能力。只读执行器拒绝写入。
 - 旧直接工具名继续可调用，兼容尚未刷新的 ChatGPT 快照；更新后刷新工具列表即可使用新入口。不同 URL 的授权令牌按 resource 隔离。

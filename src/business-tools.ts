@@ -94,14 +94,16 @@ export const businessTools: BusinessTool[] = [
     }
   },
   { name:'feishu_read_document',title:'读取飞书文档',description:'用于阅读 docx 文档或 Wiki 中的文档。默认读取官方 Markdown；支持 text 纯文本。按 offset/max_chars 分段，truncated 时用 next_offset 继续，不能将一段当作全文。表格记录请用 feishu_query_records。',
-    input:{reference,format:z.enum(['markdown','text']).default('markdown'),offset:z.number().int().min(0).default(0),max_chars:z.number().int().min(100).max(30000).default(12000)},
-    output:{document_id:z.string(),format:z.enum(['markdown','text']),content:z.string(),total_chars:z.number(),truncated:z.boolean(),next_offset:z.number().nullable()},
+    input:{reference,format:z.enum(['markdown','text']).default('markdown'),offset:z.number().int().min(0).default(0),max_chars:z.number().int().min(100).max(30000).default(12000),expected_content_hash:z.string().regex(/^[a-f0-9]{64}$/).optional().describe('续读时传上一段的 content_hash，避免拼接不同版本。')},
+    output:{document_id:z.string(),format:z.enum(['markdown','text']),content:z.string(),content_hash:z.string(),total_chars:z.number(),truncated:z.boolean(),next_offset:z.number().nullable()},
     async run(args,call) { const ref=await resolve(args.reference,'docx',call);
       const data=await call(args.format==='markdown'?'docs.v1.content.get':'docx.v1.document.rawContent',args.format==='markdown'?{params:{doc_token:ref.token,doc_type:'docx',content_type:'markdown'}}:{path:{document_id:ref.token}});
       if(typeof data.content!=='string')throw new ToolError('unexpected_response','飞书未返回文档正文。');
+      const contentHash=createHash('sha256').update(data.content).digest('hex');
+      if(args.expected_content_hash && args.expected_content_hash!==contentHash)throw new ToolError('content_changed','文档在分段读取期间改变，请从头读取或重新定位目标块。',{document_id:ref.token,content_hash:contentHash});
       // Unicode code points prevent splitting a surrogate pair across chunks.
       const chars=Array.from(data.content),end=Math.min(chars.length,args.offset+args.max_chars);
-      return {document_id:ref.token,format:args.format,content:chars.slice(args.offset,end).join(''),total_chars:chars.length,truncated:end<chars.length,next_offset:end<chars.length?end:null}; }
+      return {document_id:ref.token,format:args.format,content:chars.slice(args.offset,end).join(''),content_hash:contentHash,total_chars:chars.length,truncated:end<chars.length,next_offset:end<chars.length?end:null}; }
   },
   { name:'feishu_create_document',title:'创建飞书文档',description:'用于创建新文档，可提供 Markdown 正文和目标文件夹 token。转换成功后才创建。返回文档 ID；若正文写入失败会保留已创建文档 ID，先检查该文档，勿重复创建。',write:true,
     input:{title:z.string().trim().min(1).max(200),markdown:z.string().max(100000).optional(),folder_token:id.optional()},

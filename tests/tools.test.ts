@@ -21,7 +21,7 @@ test('daily metadata budget, complete catalog, annotations and legacy dispatch',
  const all=toolDefinitions('all');for(const t of catalog)assert.ok(all.some(d=>d.name===exposedName(t.name)));
  assert.equal(definitions.find(t=>t.name==='feishu_create_records')!.annotations!.destructiveHint,false);
  assert.equal(definitions.find(t=>t.name==='feishu_update_records')!.annotations!.destructiveHint,true);
- assert.equal(annotationsFor(catalog.find(t=>t.name==='search.v2.message.create')!).readOnlyHint,false);
+ assert.equal(annotationsFor(catalog.find(t=>t.name==='search.v2.message.create')!).readOnlyHint,true);
  const calls:string[]=[];const f=await fixture(async name=>{calls.push(name);return {ok:true};});try{
    const list=await f.client.listTools();assert.equal(list.tools.length,13);
    const forbidden=await f.client.callTool({name:'feishu_read_tool',arguments:{name:'bitable.v1.appTableRecord.batchCreate',arguments:{}}});assert.equal(forbidden.isError,true);assert.equal(calls.length,0);
