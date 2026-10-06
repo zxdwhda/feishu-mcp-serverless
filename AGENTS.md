@@ -1,4 +1,7 @@
-# 项目归属
+# Repository guidance
 
-- 本项目是 zxdwhda 的个人开源项目，正式仓库为 https://github.com/zxdwhda/feishu-mcp 。不要放入 example-org 或其他组织名下。
-- 真实密钥、OAuth 状态、私有部署配置和本机验收数据不得提交；沿用被忽略的 `.local/` 与环境变量。
+- Keep this repository suitable for public open-source use.
+- Do not commit personal information, production domains, account-specific IDs, credentials, private resource names, or machine-specific absolute paths.
+- Use neutral placeholders such as `mcp.example.com`, `your-project`, and `your-region` in examples.
+- Keep deployment-specific configuration outside the repository whenever possible.
+- Preserve third-party attribution and license notices when updating generated or adapted content.

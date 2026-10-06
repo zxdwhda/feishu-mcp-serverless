@@ -4,18 +4,16 @@
   "version": "0.4.0",
   "description": "飞书文档、数据、协作与会议工作流",
   "author": {
-    "name": "zxdwhda"
+    "name": "Feishu MCP contributors"
   },
   "license": "MIT",
-  "repository": "https://github.com/zxdwhda/feishu-mcp",
   "extensions": {
     "com.openai": {
-      "apps": "./.app.json",
       "interface": {
         "displayName": "飞书工作台",
         "shortDescription": "文档、数据与协作的完整飞书工作流",
         "longDescription": "搜索和编辑飞书资料，处理多维表格、电子表格、日程、消息、邮件、任务、审批与会议，按实际工具能力完成操作并核对结果。",
-        "developerName": "zxdwhda",
+        "developerName": "Feishu MCP contributors",
         "category": "Productivity",
         "capabilities": [
           "Read",

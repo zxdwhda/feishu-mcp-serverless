@@ -49,7 +49,7 @@ export class OAuth {
   }
   install(app: Express) {
     const c = this.config, b = c.basePath;
-    const protectedMetadata = { resource: c.resource, authorization_servers: [c.issuer], scopes_supported: ['feishu'], resource_name: 'Feishu MCP 飞书' };
+    const protectedMetadata = { resource: c.resource, authorization_servers: [c.issuer], scopes_supported: ['feishu'], resource_name: 'Feishu MCP' };
     const authMetadata = { issuer: c.issuer, authorization_endpoint: c.issuer + '/authorize', token_endpoint: c.issuer + '/token',
       registration_endpoint: c.issuer + '/register', revocation_endpoint: c.issuer + '/revoke',
       response_types_supported: ['code'], grant_types_supported: ['authorization_code','refresh_token'],

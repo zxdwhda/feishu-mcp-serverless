@@ -2,7 +2,7 @@
   "name": "feishu-mcp",
   "version": "0.4.0",
   "private": true,
-  "description": "Feishu MCP with OAuth and durable storage for Alibaba Cloud FC",
+  "description": "Self-hosted Feishu MCP server with OAuth and persistent state",
   "license": "MIT",
   "type": "module",
   "engines": {

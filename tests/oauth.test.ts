@@ -52,7 +52,7 @@ test('OAuth metadata, consent, PKCE, audience, one-time code, refresh and revoke
   const issued=await f.code();
   const body={grant_type:'authorization_code',client_id:f.client.client_id,redirect_uri:callback,resource:f.config.resource,code:issued.code,code_verifier:issued.verifier};
   assert.equal((await f.post('/feishu/token',{...body,code_verifier:'z'.repeat(64)})).status,400);
-  assert.equal((await f.post('/feishu/token',{...body,resource:'https://mcp.example/companion/mcp'})).status,400);
+  assert.equal((await f.post('/feishu/token',{...body,resource:'https://mcp.example/other/mcp'})).status,400);
   const results=await Promise.all([f.post('/feishu/token',body),f.post('/feishu/token',body)]);assert.deepEqual(results.map(x=>x.status).sort(),[200,400]);
   const token=await results.find(r=>r.status===200)!.json() as any;assert.ok(token.access_token);assert.notEqual(token.access_token,'upstream-1');
   const headers={Authorization:'Bearer '+token.access_token,Accept:'application/json, text/event-stream'};

@@ -69,15 +69,13 @@ def digest(raw):
 
 interface = {'displayName':'飞书工作台','shortDescription':'文档、数据与协作的完整飞书工作流',
     'longDescription':'搜索和编辑飞书资料，处理多维表格、电子表格、日程、消息、邮件、任务、审批与会议，按实际工具能力完成操作并核对结果。',
-    'developerName':'zxdwhda','category':'Productivity','capabilities':['Read','Write'],
+    'developerName':'Feishu MCP contributors','category':'Productivity','capabilities':['Read','Write'],
     'defaultPrompt':['整理我明天的日程和未完成任务','查找并总结指定飞书文档','核对这个多维表格的结构和记录']}
 identity={'name':'feishu-workspace','version':'0.4.0','description':'飞书文档、数据、协作与会议工作流',
-    'author':{'name':'zxdwhda'},'license':'MIT','repository':'https://github.com/zxdwhda/feishu-mcp'}
+    'author':{'name':'Feishu MCP contributors'},'license':'MIT'}
 dump(OUT/'plugin.json', {'$schema':'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',**identity,
-    'extensions':{'com.openai':{'apps':'./.app.json','interface':interface}}})
-dump(OUT/'.codex-plugin/plugin.json',{**identity,'skills':'./skills/','apps':'./.app.json','interface':interface})
-# Public technical connection ID, verified in the user's installed ChatGPT UI.
-dump(OUT/'.app.json',{'apps':{'feishu':{'id':'example_connection'}}})
+    'extensions':{'com.openai':{'interface':interface}}})
+dump(OUT/'.codex-plugin/plugin.json',{**identity,'skills':'./skills/','interface':interface})
 dump(OUT/'mcp.json',{'$schema':'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
     'mcpServers':{'feishu':{'type':'streamable-http','url':'https://mcp.example.com/feishu/mcp'}}})
 shutil.copyfile(ROOT/'LICENSE', OUT/'LICENSE')

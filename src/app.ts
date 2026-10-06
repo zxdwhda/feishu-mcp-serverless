@@ -24,9 +24,9 @@ export function createApp(config:Config,store:Store,feishu = new Feishu(config,s
   }));
   app.use(express.json({limit:'2mb'}));app.use(express.urlencoded({extended:false,limit:'16kb'}));
   oauth.install(app);
-  app.get('/',(_req,res)=>res.type('html').send(page('Feishu MCP MCP',`<p>分别添加连接并授权，即可在 ChatGPT 中使用对应服务。</p><h2>飞书</h2><p><a href="${config.basePath}">连接说明</a> · <code>${config.resource}</code></p><h2>Companion</h2><p><code>${config.origin}/companion/mcp</code></p>`)));
+  app.get('/',(_req,res)=>res.type('html').send(page('Feishu MCP',`<p>自托管的飞书 MCP 服务。</p><p><a href="${config.basePath}">连接说明</a> · <code>${config.resource}</code></p>`)));
   app.get(config.basePath+'/healthz',(_req,res)=>res.json({status:'ok',service:'feishu-mcp',version:VERSION,revision:process.env.REVISION||'development',catalog_size:catalog.length,exposed_tools:toolDefinitions().length,full_tools:toolDefinitions('all').length,profiles}));
-  app.get([config.basePath,config.basePath+'/'],(_req,res)=>res.type('html').send(page('Feishu MCP 飞书 MCP',`<p>在 ChatGPT 中添加 OAuth 连接：</p><p><code>${config.resource}</code></p><p>日常入口提供文件搜索、Markdown 文档读写、多维表格查询与批量记录操作；其他能力可按需查找。</p><p>完整工具入口：<code>${config.resource}/all</code>。可选分组：docs、bitable、calendar、tasks、messages、drive、wiki，在 MCP 地址末尾加分组名。</p><p>工具分组不增加数据权限。更新后在 ChatGPT 刷新工具列表；旧工具调用继续兼容。</p>`)));
+  app.get([config.basePath,config.basePath+'/'],(_req,res)=>res.type('html').send(page('Feishu MCP',`<p>在 ChatGPT 中添加 OAuth 连接：</p><p><code>${config.resource}</code></p><p>日常入口提供文件搜索、Markdown 文档读写、多维表格查询与批量记录操作；其他能力可按需查找。</p><p>完整工具入口：<code>${config.resource}/all</code>。可选分组：docs、bitable、calendar、tasks、messages、drive、wiki，在 MCP 地址末尾加分组名。</p><p>工具分组不增加数据权限。更新后在 ChatGPT 刷新工具列表；旧工具调用继续兼容。</p>`)));
   app.all(profiles.map(p=>config.basePath+'/mcp'+(p==='daily'?'':'/'+p)),async(req,res,next)=>{
     try {
       if(req.headers.origin && req.headers.origin!==config.origin){res.status(403).json({error:'untrusted_origin'});return;}

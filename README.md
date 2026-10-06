@@ -1,22 +1,20 @@
-# Feishu MCP Serverless
+# Feishu MCP
 
-本项目由 [zxdwhda](https://github.com/zxdwhda) 独立维护，正式开源仓库：[zxdwhda/feishu-mcp](https://github.com/zxdwhda/feishu-mcp)。
+一个面向飞书 OpenAPI 的自托管 MCP 服务，支持 OAuth、持久化授权状态和按需工具发现，可供 ChatGPT 等支持远程 MCP 的客户端使用。
 
-将飞书官方 OpenAPI MCP 的工具部署到独立服务器，让 ChatGPT 等远程 MCP 客户端通过 OAuth 操作飞书资料。
-
-独立 MIT 项目，复用 `@larksuiteoapi/lark-mcp@0.5.1` 的工具、参数结构和调用实现。这里负责 HTTP 服务、云端授权、持久化及部署。来源与原许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目复用 `@larksuiteoapi/lark-mcp` 的工具、参数结构和调用实现，并提供 HTTP 服务、OAuth、状态存储、工具分组和部署脚本。第三方来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 功能
 
-- 无状态 Streamable HTTP，默认 `/feishu/mcp`，支持 FC 缩容到零。
-- 飞书用户登录；MCP 客户端使用独立的授权码、访问令牌和刷新令牌。飞书令牌不会交给 MCP 客户端。
-- OAuth discovery、DCR、PKCE S256、resource 校验、显式授权页、浏览器状态绑定、一次性授权码、刷新令牌轮换和撤销。
-- 私有 OSS 加密存储授权状态，跨实例的一次性操作用 OSS 原子禁止覆盖实现。
-- 日常入口提供 13 个工具：9 个业务工具和 4 个能力发现/调用工具；503 个原生用户工具完整保留。
-- 文件搜索使用 `feishu_search_files`，并行搜索云文档和 Wiki；文档支持 Markdown 读写，多维表格提供结构、查询和批量记录操作。
-- 每个操作仍受飞书应用权限、用户授权和资源权限约束，直接提供工具不会绕过这些权限。
+- Streamable HTTP MCP，默认路径为 `/feishu/mcp`。
+- 飞书用户 OAuth 登录；MCP 客户端使用独立授权码、访问令牌和刷新令牌。
+- 支持 OAuth discovery、DCR、PKCE S256、resource 校验、刷新令牌轮换和撤销。
+- 支持内存或 OSS 持久化授权状态；生产环境建议使用加密持久化存储。
+- 提供常用业务工具，并保留完整原生工具目录，可按需搜索 schema 后调用。
+- 支持文件搜索、Markdown 文档读写、多维表格结构与记录操作等常见工作流。
+- 所有操作仍受飞书应用权限、用户授权和资源 ACL 约束。
 
-**工具目录存在不代表每个 API 都已真实验收。** 官方上游标注的二进制上传下载接口不在当前调用目录中；个人账单的文件导入可先解析导出文件，再调用多维表格记录工具。不能自动访问银行或支付平台账单。
+> 工具出现在目录中，不代表对应 API 已在所有租户、权限组合或账户环境中完成真实验收。请以实际飞书应用权限和运行结果为准。
 
 ## 本地运行
 
@@ -25,78 +23,75 @@
 ```sh
 npm ci
 cp .env.example .env
-# 填入自己的飞书应用配置。Node 负责载入环境文件。
+# 填入自己的飞书应用配置
 node --env-file=.env --import tsx src/index.ts
 ```
+
+运行完整校验：
 
 ```sh
 npm run verify
 ```
 
-`.npmrc` 禁止依赖安装脚本：上游含桌面 keytar，但本项目按模块导入工具，不使用桌面认证与钥匙串。构建产物不需要该原生模块。
+## 飞书应用配置
 
-## 飞书应用
+1. 在自己的飞书企业中创建应用，并开通所需 API 权限。
+2. 添加回调地址：`https://your-domain.example/feishu/callback`。
+3. 发布应用并设置合适的可用范围。
+4. 将应用 ID、Secret 和所需 scopes 写入部署环境变量。
+5. 不要把真实密钥、账户数据、生产域名或内部资源标识提交到仓库。
 
-1. 在自己的企业创建应用，配置所需 API 的用户权限。可参考已验证的 [权限清单](docs/feishu-permissions.json)，包含持续访问所需的 `offline_access` 、云文档搜索所需的 `drive:drive.search:readonly` 及 Wiki 搜索所需的 `search:docs:read`。
-2. 添加精确回调 `https://你的域名/feishu/callback`。
-3. 发布应用，设置合适的可用范围。
-4. 将应用 ID、Secret 配置到部署环境。不要提交密钥或真实账单。
-5. `FEISHU_SCOPES` 包含 `offline_access` 和需要授权的 API scopes；应用未开通的 scope 不会因这里配置而生效。
+可参考 [权限清单](docs/feishu-permissions.json)。通过用户身份执行的工具不会绕过用户原有的数据权限。
 
-通过用户身份执行，不能借此获得用户本来没有的数据权限。变更权限后应重新连接授权。多维表格的单条读取使用 `base:record:read`，按条件查询和列出记录还需要 `base:record:retrieve`，两者都应开通并在 OAuth 中请求。
+## 部署
 
-## 服务器部署（当前）
+项目可运行在普通 Node.js 容器或兼容的 Serverless 环境中。示例配置位于 `deploy/` 和 `.env.example`。
 
-由 Feishu MCP 登记的 `deploy/sg-workbench/deploy.sh` 管理示例地域服务器上的容器、TLS、切换与回滚。复用已有飞书应用和加密 OSS 状态，MCP 地址保持 `https://mcp.example.com/feishu/mcp`。完整插件在 `plugins/feishu-workspace/`，包含 28 个技能入口；服务器提供五个领域入口供 ChatGPT 扫描导入，覆盖同一份指导内容。
+生产部署建议：
 
-函数计算不再是当前部署目标。以下命令保留为历史恢复入口；迁移后不运行它们重新发布。
+- 使用自己的域名，例如 `https://mcp.example.com/feishu/mcp`。
+- 使用独立的私有持久化存储。
+- 将云资源名称、地域、域名、应用 ID 与密钥全部放在部署侧配置中。
+- 不要在公开仓库中硬编码生产服务器、日志项目、连接器 ID 或个人账户信息。
 
-## FC 部署（历史）
-
-详见 [部署说明](docs/deployment.md)。部署入口：
-
-```sh
-sh deploy/deploy.sh preflight /absolute/path/to/private-deploy.json
-sh deploy/deploy.sh deploy /absolute/path/to/private-deploy.json
-sh deploy/deploy.sh domain /absolute/path/to/private-deploy.json
-```
-
-项目和密钥配置分离；公网服务不依赖开发者电脑。Docker 运行可使用 [Dockerfile](Dockerfile)。
+历史部署脚本仅作为参考，详见 [部署说明](docs/deployment.md)。
 
 ## ChatGPT 连接
 
-在支持自定义 MCP 的 ChatGPT 设置中添加 MCP URL，选择 OAuth。当前部署的连接名称建议为 **Feishu MCP 飞书**。复制 ChatGPT 界面显示的精确回调地址到 `OAUTH_REDIRECT_URIS`；服务支持 issuer identification，默认包含稳定回调。
+在支持自定义 MCP 的 ChatGPT 中添加你的 MCP URL，并选择 OAuth。将 ChatGPT 界面显示的精确回调地址加入 `OAUTH_REDIRECT_URIS`。
 
-具体账户是否开放自定义连接，以 ChatGPT 界面为准。[OpenAI 官方连接说明](https://developers.openai.com/plugins/deploy/connect-chatgpt) · [授权说明](https://developers.openai.com/plugins/build/auth)。
+OpenAI 官方文档：
 
-## 工具组织与兼容
+- [连接 MCP](https://developers.openai.com/plugins/deploy/connect-chatgpt)
+- [OAuth 授权](https://developers.openai.com/plugins/build/auth)
 
-- 日常：`/feishu/mcp`，13 个工具，定义约 21 KB。
-- 完整：`/feishu/mcp/all`，全部 765 个工具；仅在需要直接查看全部原生接口时使用。
-- 分组：末尾添加 `docs`、`bitable`、`calendar`、`tasks`、`messages`、`drive`、`wiki`，提供日常工具和对应原生工具。
-- 日常模式通过 `feishu_search_tools` → `feishu_get_tool_schema` → `feishu_read_tool` / `feishu_call_tool` 访问其他能力。只读执行器拒绝写入。
-- 旧直接工具名继续可调用，兼容尚未刷新的 ChatGPT 快照；更新后刷新工具列表即可使用新入口。不同 URL 的授权令牌按 resource 隔离。
-- 分组改变工具展示，不改变用户或应用的数据权限。
+## 工具入口
 
-设计、错误约定与测试用例见 [ChatGPT 接入与工具设计](docs/chatgpt-compatibility.md)。
+- 日常入口：`/feishu/mcp`
+- 完整入口：`/feishu/mcp/all`
+- 可选分组：`docs`、`bitable`、`calendar`、`tasks`、`messages`、`drive`、`wiki`
 
-## 个人账单示例
+日常模式可通过 `feishu_search_tools` → `feishu_get_tool_schema` → `feishu_read_tool` / `feishu_call_tool` 访问其他能力。
 
-见 [个人账单表设计](docs/personal-bills.md)。这是通用飞书 MCP 的使用示例，项目并不限于账单。
+设计、错误约定与兼容说明见 [ChatGPT 接入与工具设计](docs/chatgpt-compatibility.md)。
 
-## 验收
+## 安全与隐私
 
-已完成 ChatGPT 网页授权及多维表格真实读写；详见 [验收记录](docs/verification.md)。
+公开仓库中不应包含：
 
-## 当前边界
+- 飞书 App Secret、访问令牌、刷新令牌或云厂商密钥；
+- 真实生产域名、服务器地址、日志项目或存储桶名称；
+- ChatGPT/插件安装实例的技术 ID；
+- 个人邮箱、真实姓名、账单、内部项目名和本机绝对路径；
+- 仅对单一生产环境成立的验收记录。
 
-- OAuth 登录会话最长 30 天，过期需重新连接；飞书刷新令牌提前失效也需重新授权。
-- 上游令牌轮换发生网络结果不明或进程退出时，要求重新授权，避免并发重复刷新。
-- OSS 桶禁止启用或暂停版本控制；不要对客户端注册对象配置短期生命周期删除。
-- 上游依赖包含 npm audit 报告的 PAC 代理解析依赖问题。当前 OSS 请求使用固定 endpoint、未启用 PAC，仍需随上游升级跟进；不声称依赖审计零问题。
+如果曾经误提交敏感信息，仅删除当前文件并不能清除 Git 历史；应按 GitHub 的敏感数据清理流程重写历史并轮换相关凭据。
+
+## 许可
+
+MIT。第三方代码和资料的许可信息见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 参考
 
-- [飞书官方源码](https://github.com/larksuite/lark-openapi-mcp)
-- [FC 自定义域名路由](https://help.aliyun.com/zh/functioncompute/configure-custom-domain-names)
+- [飞书官方 lark-openapi-mcp](https://github.com/larksuite/lark-openapi-mcp)
 - [OSS 原子禁止覆盖](https://www.alibabacloud.com/help/en/oss/developer-reference/putobject)

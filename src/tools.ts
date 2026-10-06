@@ -71,7 +71,7 @@ export function makeInvoker(config:Config,userToken:()=>Promise<string>):Invoke 
   };
 }
 export function makeServer(config:Config,userToken:()=>Promise<string>,profile:ToolProfile='daily',override?:Invoke,authChallenge?:string) {
-  const server=new Server({name:'Feishu MCP Feishu',version:VERSION},{capabilities:{tools:{},...skillCapabilities},instructions:'操作当前授权用户的飞书资料。找文件优先 feishu_search_files；读正文用 feishu_read_document；多维表格先 get_table_schema 再 query/create/update/delete_records。其他能力通过 feishu_search_tools → feishu_get_tool_schema → feishu_read_tool/feishu_call_tool 使用，完整用户工具仍可访问。分页或正文截断时继续读取；部分失败不等于没有数据。写入后读取核对，超时先查结果，避免重复写入。只在用户请求范围内修改、发送或删除。'});
+  const server=new Server({name:'Feishu MCP',version:VERSION},{capabilities:{tools:{},...skillCapabilities},instructions:'操作当前授权用户的飞书资料。找文件优先 feishu_search_files；读正文用 feishu_read_document；多维表格先 get_table_schema 再 query/create/update/delete_records。其他能力通过 feishu_search_tools → feishu_get_tool_schema → feishu_read_tool/feishu_call_tool 使用，完整用户工具仍可访问。分页或正文截断时继续读取；部分失败不等于没有数据。写入后读取核对，超时先查结果，避免重复写入。只在用户请求范围内修改、发送或删除。'});
   installSkills(server);
   const invoke=override||makeInvoker(config,userToken);
   const challenge=authChallenge || `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource${config.basePath}/mcp", scope="feishu"`;

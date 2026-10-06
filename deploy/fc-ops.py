@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared MCP FC operations. Uses the existing Aliyun CLI profile; no credentials in reports."""
+"""Feishu MCP FC operations. Uses the existing Aliyun CLI profile; no credentials in reports."""
 import argparse
 import copy
 import json
@@ -10,10 +10,10 @@ import tempfile
 import time
 import urllib.request
 
-REGION = 'your-region'
-PROJECT = 'your-log-project'
-DOMAIN = 'mcp.example.com'
-FUNCTIONS = ('feishu-mcp', 'companion-mcp')
+REGION = os.environ.get('FEISHU_FC_REGION', 'your-region')
+PROJECT = os.environ.get('FEISHU_SLS_PROJECT', 'your-log-project')
+DOMAIN = os.environ.get('FEISHU_MCP_DOMAIN', 'mcp.example.com')
+FUNCTIONS = ('feishu-mcp',)
 
 def cli(args, body=None, missing=False):
     filename = None
@@ -67,7 +67,7 @@ def configure():
 def alarms():
     account = cli(['sts', 'GetCallerIdentity'])['AccountId']
     for name in FUNCTIONS:
-        metrics = [('FunctionFunctionErrors', 1), ('FunctionServerErrors', 1), ('FunctionHTTPStatus5xx', 3), ('FunctionConcurrencyThrottles', 1), ('FunctionResourceThrottles', 1), ('FunctionMaxDuration', 55000 if name == 'feishu-mcp' else 110000)]
+        metrics = [('FunctionFunctionErrors', 1), ('FunctionServerErrors', 1), ('FunctionHTTPStatus5xx', 3), ('FunctionConcurrencyThrottles', 1), ('FunctionResourceThrottles', 1), ('FunctionMaxDuration', 55000)]
         for metric, threshold in metrics:
             meta = cli(['cms', 'DescribeMetricMetaList', '--Namespace', 'acs_fc', '--MetricName', metric])['Resources']['Resource']
             assert meta and 'Value' in meta[0]['Statistics']
